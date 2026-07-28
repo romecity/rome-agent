@@ -20,7 +20,7 @@ User (Web UI / API)
   Amazon Bedrock Knowledge Base ← S3 (10 curated documents)
   [Titan Embeddings v2 + built-in vector store]
         ↓
-  Amazon Bedrock — Claude 3 Sonnet
+  Amazon Bedrock — Claude Sonnet 4.6
   [retrieved context + question → answer]
         ↓
   DynamoDB (analytics) + CloudWatch (observability)
@@ -30,7 +30,7 @@ User (Web UI / API)
 
 | Layer | Technology |
 |---|---|
-| LLM | Amazon Bedrock — Claude 3 Sonnet |
+| LLM | Amazon Bedrock — Claude Sonnet 4.6 |
 | Embeddings | Amazon Titan Text Embeddings v2 |
 | Vector Store | Bedrock built-in (managed) |
 | Compute | AWS Lambda (Python 3.13) |
