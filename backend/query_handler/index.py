@@ -139,9 +139,6 @@ def handler(event, context):
         retrieval_response = bedrock_agent.retrieve(
             knowledgeBaseId=KB_ID,
             retrievalQuery={'text': question},
-            retrievalConfiguration={
-                'vectorSearchConfiguration': {'numberOfResults': 5}
-            }
         )
 
         chunks = retrieval_response.get('retrievalResults', [])
