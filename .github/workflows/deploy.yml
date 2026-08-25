@@ -48,8 +48,8 @@ jobs:
       - name: Run unit tests
         working-directory: backend
         run: |
-          pip install pytest boto3 moto
-          pytest tests/ -v || true
+          pip install -r tests/requirements-test.txt
+          PYTHONPATH=. pytest tests/test_query_handler.py -v -m "not integration and not load"
 
       - name: CDK synth (validate)
         working-directory: infrastructure
@@ -60,8 +60,7 @@ jobs:
         run: |
           npx cdk deploy --all \
             --context env=${{ steps.set-env.outputs.DEPLOY_ENV }} \
-            --require-approval never \
-            --profile default
+            --require-approval never
 
       - name: Smoke test
         run: |

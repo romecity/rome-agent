@@ -7,19 +7,22 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Construct } from 'constructs';
 
 interface RomeAgentAPIStackProps extends cdk.StackProps {
   environment: string;
   analyticsTable: dynamodb.Table;
   knowledgeBaseId: string;
+  alertEmail: string;
+  slackWebhookUrl?: string;
 }
 
 export class RomeAgentAPIStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: RomeAgentAPIStackProps) {
     super(scope, id, props);
 
-    const { environment, analyticsTable, knowledgeBaseId } = props;
+    const { environment, analyticsTable, knowledgeBaseId, alertEmail, slackWebhookUrl } = props;
 
     // IAM role for Query Handler Lambda
     const queryHandlerRole = new iam.Role(this, 'QueryHandlerRole', {
@@ -66,7 +69,7 @@ export class RomeAgentAPIStack extends cdk.Stack {
       environment: {
         KB_ID: knowledgeBaseId,
         TABLE_NAME: analyticsTable.tableName,
-        MODEL_ID: 'anthropic.claude-3-sonnet-20240229-v1:0',
+        MODEL_ID: 'us.anthropic.claude-sonnet-4-6',
         ENVIRONMENT: environment,
       },
       logRetention: logs.RetentionDays.ONE_MONTH,
@@ -132,6 +135,37 @@ export class RomeAgentAPIStack extends cdk.Stack {
     const healthResource = api.root.addResource('health');
     healthResource.addMethod('GET', new apigateway.LambdaIntegration(healthCheck));
 
+    // SNS Alert Topic
+    const alertTopic = new sns.Topic(this, 'AlertTopic', {
+      topicName: `rome-agent-alerts-${environment}`,
+      displayName: `Rome Agent Alerts (${environment})`,
+    });
+
+    // Email subscription
+    alertTopic.addSubscription(
+      new sns_subscriptions.EmailSubscription(alertEmail)
+    );
+
+    // Slack Notifier Lambda (if webhook URL provided)
+    if (slackWebhookUrl) {
+      const slackNotifier = new lambda.Function(this, 'SlackNotifier', {
+        functionName: `rome-agent-slack-notifier-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_13,
+        handler: 'index.handler',
+        code: lambda.Code.fromAsset('../backend/slack_notifier'),
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          SLACK_WEBHOOK_URL: slackWebhookUrl,
+          ENVIRONMENT: environment,
+        },
+      });
+
+      alertTopic.addSubscription(
+        new sns_subscriptions.LambdaSubscription(slackNotifier)
+      );
+    }
+
     // CloudWatch Alarms
     const errorAlarm = new cloudwatch.Alarm(this, 'ErrorRateAlarm', {
       alarmName: `rome-agent-error-rate-${environment}`,
@@ -153,6 +187,12 @@ export class RomeAgentAPIStack extends cdk.Stack {
       evaluationPeriods: 2,
       alarmDescription: 'Rome Agent p95 latency exceeded 5 seconds',
     });
+
+    // Wire alarms to SNS notifications
+    errorAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
+    errorAlarm.addOkAction(new cloudwatch_actions.SnsAction(alertTopic));
+    latencyAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
+    latencyAlarm.addOkAction(new cloudwatch_actions.SnsAction(alertTopic));
 
     // Outputs
     new cdk.CfnOutput(this, 'APIEndpoint', {

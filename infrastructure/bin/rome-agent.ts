@@ -34,6 +34,8 @@ const apiStack = new RomeAgentAPIStack(app, `RomeAgentAPIStack-${env}`, {
   environment: env,
   analyticsTable: dataStack.analyticsTable,
   knowledgeBaseId: aiStack.knowledgeBaseId,
+  alertEmail: 'mackj1@bu.edu',
+  slackWebhookUrl: process.env.SLACK_WEBHOOK_URL,
 });
 
 cdk.Tags.of(app).add('Project', 'rome-agent');

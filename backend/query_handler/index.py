@@ -117,7 +117,7 @@ def handler(event, context):
 
     try:
         # Parse request
-        body = json.loads(event.get('body', '{}'))
+        body = json.loads(event.get('body', '{}') or '{}')
         question = body.get('question', '').strip()
         ip = event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'unknown')
 
