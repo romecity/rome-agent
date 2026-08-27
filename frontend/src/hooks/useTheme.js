@@ -12,6 +12,7 @@ export function useTheme() {
 
   useEffect(() => {
     const root = document.documentElement
+    root.style.transition = 'background-color 0.5s ease, color 0.5s ease'
     if (theme === 'dark') {
       root.classList.add('dark')
     } else {

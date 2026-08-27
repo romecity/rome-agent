@@ -1,23 +1,44 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { sendQuery } from '../api/client'
+import { sendQuery, checkHealth } from '../api/client'
 import MessageBubble from './MessageBubble'
 import TypingIndicator from './TypingIndicator'
 import ChatInput from './ChatInput'
+import StatusIndicator from './StatusIndicator'
 
 const WELCOME_MESSAGE = {
   id: 'welcome',
   role: 'assistant',
   content: "Hi, I'm Rome AI. I can answer questions about Rome's services, architecture, and capabilities. What would you like to know?",
-  timestamp: new Date(),
+  timestamp: Date.now(),
 }
 
-export default function Chat() {
-  const [messages, setMessages] = useState([WELCOME_MESSAGE])
+const STORAGE_KEY = 'rome-chat-history'
+
+function loadMessages() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      const messages = JSON.parse(stored)
+      if (messages.length > 0) return messages
+    }
+  } catch {}
+  return [WELCOME_MESSAGE]
+}
+
+function saveMessages(messages) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
+  } catch {}
+}
+
+export default function Chat({ initialQuestion }) {
+  const [messages, setMessages] = useState(loadMessages)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [apiStatus, setApiStatus] = useState('checking') // 'online' | 'offline' | 'checking'
   const messagesEndRef = useRef(null)
-  const chatContainerRef = useRef(null)
+  const hasHandledInitialQuestion = useRef(false)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -27,17 +48,29 @@ export default function Chat() {
     scrollToBottom()
   }, [messages, isLoading])
 
-  const handleSend = async (question) => {
+  // Persist messages to localStorage
+  useEffect(() => {
+    saveMessages(messages)
+  }, [messages])
+
+  // Check API health on mount
+  useEffect(() => {
+    checkHealth()
+      .then(() => setApiStatus('online'))
+      .catch(() => setApiStatus('offline'))
+  }, [])
+
+  // Handle pre-filled question from landing page
+  const handleSend = useCallback(async (question) => {
     if (!question.trim() || isLoading) return
 
     setError(null)
 
-    // Add user message
     const userMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
       content: question.trim(),
-      timestamp: new Date(),
+      timestamp: Date.now(),
     }
     setMessages(prev => [...prev, userMessage])
     setIsLoading(true)
@@ -51,9 +84,10 @@ export default function Chat() {
         content: response.answer,
         sources: response.sources,
         latency: response.latency_ms,
-        timestamp: new Date(),
+        timestamp: Date.now(),
       }
       setMessages(prev => [...prev, assistantMessage])
+      setApiStatus('online')
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.')
 
@@ -62,12 +96,27 @@ export default function Chat() {
         role: 'assistant',
         content: "I'm having trouble processing that request right now. Please try again in a moment.",
         isError: true,
-        timestamp: new Date(),
+        timestamp: Date.now(),
       }
       setMessages(prev => [...prev, errorMessage])
     } finally {
       setIsLoading(false)
     }
+  }, [isLoading])
+
+  // Auto-send initial question from landing page
+  useEffect(() => {
+    if (initialQuestion && !hasHandledInitialQuestion.current) {
+      hasHandledInitialQuestion.current = true
+      // Small delay so the chat UI renders first
+      const timer = setTimeout(() => handleSend(initialQuestion), 300)
+      return () => clearTimeout(timer)
+    }
+  }, [initialQuestion, handleSend])
+
+  const clearHistory = () => {
+    setMessages([WELCOME_MESSAGE])
+    localStorage.removeItem(STORAGE_KEY)
   }
 
   return (
@@ -78,11 +127,21 @@ export default function Chat() {
       transition={{ duration: 0.4 }}
       className="pt-14 flex flex-col h-screen"
     >
+      {/* Status bar */}
+      <div className="flex items-center justify-between px-4 sm:px-6 py-2 max-w-3xl mx-auto w-full">
+        <StatusIndicator status={apiStatus} />
+        {messages.length > 1 && (
+          <button
+            onClick={clearHistory}
+            className="text-[11px] text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
+          >
+            Clear history
+          </button>
+        )}
+      </div>
+
       {/* Messages area */}
-      <div
-        ref={chatContainerRef}
-        className="flex-1 overflow-y-auto px-4 sm:px-6 py-6"
-      >
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
         <div className="max-w-3xl mx-auto space-y-4">
           {messages.map((message, index) => (
             <MessageBubble
@@ -112,7 +171,7 @@ export default function Chat() {
           )}
           <ChatInput onSend={handleSend} disabled={isLoading} />
           <p className="text-[11px] text-gray-400 dark:text-gray-600 text-center mt-3">
-            Rome AI uses RAG to answer from a curated knowledge base. Responses may not cover all topics.
+            Enter to send · Shift+Enter for new line · Responses from curated knowledge base
           </p>
         </div>
       </div>

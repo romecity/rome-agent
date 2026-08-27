@@ -8,9 +8,15 @@ import Chat from './components/Chat'
 export default function App() {
   const { theme, toggleTheme } = useTheme()
   const [view, setView] = useState('landing') // 'landing' | 'chat'
+  const [initialQuestion, setInitialQuestion] = useState(null)
+
+  const handleStartChat = (question = null) => {
+    setInitialQuestion(question)
+    setView('chat')
+  }
 
   return (
-    <div className="min-h-screen transition-colors duration-300 bg-white dark:bg-black">
+    <div className="min-h-screen transition-colors duration-500 bg-white dark:bg-black">
       <Header
         theme={theme}
         toggleTheme={toggleTheme}
@@ -20,9 +26,9 @@ export default function App() {
 
       <AnimatePresence mode="wait">
         {view === 'landing' ? (
-          <Landing key="landing" onStartChat={() => setView('chat')} />
+          <Landing key="landing" onStartChat={handleStartChat} />
         ) : (
-          <Chat key="chat" />
+          <Chat key="chat" initialQuestion={initialQuestion} />
         )}
       </AnimatePresence>
     </div>
