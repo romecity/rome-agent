@@ -194,6 +194,43 @@ export class RomeAgentAPIStack extends cdk.Stack {
     latencyAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
     latencyAlarm.addOkAction(new cloudwatch_actions.SnsAction(alertTopic));
 
+    // CloudWatch Dashboard
+    const dashboard = new cloudwatch.Dashboard(this, 'Dashboard', {
+      dashboardName: `rome-agent-${environment}`,
+    });
+
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Request Count',
+        width: 12,
+        left: [queryHandler.metricInvocations({ period: cdk.Duration.minutes(5) })],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Latency (p50 / p95)',
+        width: 12,
+        left: [
+          queryHandler.metricDuration({ period: cdk.Duration.minutes(5), statistic: 'p50' }),
+          queryHandler.metricDuration({ period: cdk.Duration.minutes(5), statistic: 'p95' }),
+        ],
+      }),
+    );
+
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Error Rate',
+        width: 12,
+        left: [queryHandler.metricErrors({ period: cdk.Duration.minutes(5) })],
+      }),
+      new cloudwatch.SingleValueWidget({
+        title: 'Current Alarm States',
+        width: 12,
+        metrics: [
+          errorAlarm.metric,
+          latencyAlarm.metric,
+        ],
+      }),
+    );
+
     // Outputs
     new cdk.CfnOutput(this, 'APIEndpoint', {
       value: api.url,
